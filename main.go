@@ -14,7 +14,7 @@ func main() {
 	kafkaHost := os.Getenv("KAFKA_HOST")
 	groupId := os.Getenv("GROUP")
 	offset := os.Getenv("OFFSET")
-
+	topics := os.Getenv("TOPICS")
 	if kafkaHost == "" {
 		kafkaHost = "localhost:9092"
 	}
@@ -26,6 +26,15 @@ func main() {
 	if offset == "" {
 		offset = kafka.OffsetBeginning.String()
 	}
+
+	if topics == "" {
+		topics = "test-topic-1"
+	}
+
+	topicArr := strings.Split(topics, ",")
+
+	fmt.Printf("connecting to %s and topic: %s, Group: %s", kafkaHost, topics, groupId)
+
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -43,8 +52,7 @@ func main() {
 	}
 
 	fmt.Printf("Created Consumer %v\n", c)
-	topics := strings.Split(os.Getenv("TOPICS"), ",")
-	err = c.SubscribeTopics(topics, nil)
+	err = c.SubscribeTopics(topicArr, nil)
 
 	run := true
 
