@@ -20,6 +20,7 @@ service:
     enabled: false
     path: /metrics
   env:
-    KAFKA_HOST: dev01
+    KAFKA_HOST: localhost:9092
     AWS_REGION: us-east-1
-    GROUP: false
+    GROUP: kafka-golang-service
+    TOPICS: test-topic-0
