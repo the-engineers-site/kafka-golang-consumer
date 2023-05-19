@@ -1,32 +1,29 @@
-# Use the official Go image as the base image
-FROM golang:1.17-alpine AS build
+FROM golang:1.17-alpine AS builder
 
-# Set the working directory inside the container
-WORKDIR /app
+ENV PATH="/go/bin:${PATH}"
+ENV GO111MODULE=on
+ENV CGO_ENABLED=1
+ENV GOOS=linux
+ENV GOARCH=amd64
 
-# Install build dependencies
-RUN apk --no-cache add build-base
+WORKDIR /go/src
 
-# Copy the Go module files to the container
-COPY go.mod go.sum ./
-
-# Download and cache the Go module dependencies
+COPY go.mod .
+COPY go.sum .
 RUN go mod download
 
-# Copy the Go application source code to the container
-COPY main.go ./
+RUN apk -U add ca-certificates
+RUN apk update && apk upgrade && apk add pkgconf git bash build-base sudo
+RUN git clone https://github.com/edenhill/librdkafka.git && cd librdkafka && ./configure --prefix /usr && make && make install
 
-# Build the Go application inside the container
-RUN CGO_ENABLED=1 go build -o kafka-app
+COPY . .
 
-# Create a new Docker image with a minimal Alpine base image
-FROM alpine:latest
+RUN go build -tags musl --ldflags "-extldflags -static" -o main .
 
-# Set the working directory inside the container
-WORKDIR /app
+FROM scratch AS runner
 
-# Copy the built binary from the build stage
-COPY --from=build /app/kafka-app ./
+COPY --from=builder /go/src/main /
 
-# Run the Kafka application
-CMD ["./kafka-app"]
+EXPOSE 8080
+
+ENTRYPOINT ["./main"]
