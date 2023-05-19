@@ -29,6 +29,8 @@ spec:
               value: {{.Values.service.env.AWS_REGION}}
             - name: GROUP
               value: {{.Values.service.env.GROUP}}
+            - name: TOPIC
+              value: {{.Values.service.env.TOPICS}}
           imagePullPolicy: Always
           resources:
             limits:
