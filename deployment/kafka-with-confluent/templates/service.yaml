@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.Values.service.name}}
+  namespace: {{.Values.service.namespace}}
+  labels:
+    app: {{ .Values.service.name }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: {{ .Values.service.serviceMonitor.path | quote }}
+    prometheus.io/port: "8080"
+spec:
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{.Values.service.port}}
+      targetPort: {{.Values.service.port}}
+  selector:
+    app: {{.Values.service.name}}
+  type: ClusterIP

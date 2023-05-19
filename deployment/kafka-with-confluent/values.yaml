@@ -1,0 +1,25 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/the-engineers-site/the-engineers-site/kafka-golang-consumer
+  pullPolicy: Always
+  tag: "latest"
+
+hpa:
+  enabled: false
+  replicas:
+    max: 10
+    min: 2
+
+service:
+  name: kafka-golang-consumer
+  namespace: kafka-golang-consumer
+  type: ClusterIP
+  port: 8080
+  serviceMonitor:
+    enabled: false
+    path: /metrics
+  env:
+    KAFKA_HOST: dev01
+    AWS_REGION: us-east-1
+    GROUP: false

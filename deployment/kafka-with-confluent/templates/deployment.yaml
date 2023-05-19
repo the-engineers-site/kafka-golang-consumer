@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.service.name }}
+  namespace: {{ .Values.service.namespace }}
+  labels:
+    app: {{ .Values.service.name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.service.name }}
+  template:
+    metadata:
+      labels:
+        app:  {{ .Values.service.name }}
+    spec:
+      containers:
+        - name: {{ .Values.service.name }}
+          image: "{{.Values.image.repository}}:{{.Values.image.tag}}"
+          ports:
+            - name: http
+              containerPort: {{.Values.service.port}}
+              protocol: TCP
+          env:
+            - name: KAFKA_HOST
+              value: {{.Values.service.env.KAFKA_HOST}}
+            - name: AWS_REGION
+              value: {{.Values.service.env.AWS_REGION}}
+            - name: GROUP
+              value: {{.Values.service.env.GROUP}}
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: "2"
+              memory: "2G"
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
