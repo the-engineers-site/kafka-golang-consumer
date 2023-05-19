@@ -22,4 +22,5 @@ jobs:
 
       - name: Build project
         run: |
-          CGO_ENABLED=1 go build -o kafka-app
+          ls -ltrah
+          CGO_ENABLED=1 go build -o kafka-app main.go
