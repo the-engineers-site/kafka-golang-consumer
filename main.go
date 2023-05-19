@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
-	"sync"
+	"strings"
+	"syscall"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 func main() {
@@ -26,83 +26,64 @@ func main() {
 	if offset == "" {
 		offset = kafka.OffsetBeginning.String()
 	}
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Set up Kafka consumer configuration
-	consumerConfig := &kafka.ConfigMap{
-		"bootstrap.servers": kafkaHost,
-		"group.id":          groupId,
-		"auto.offset.reset": offset,
-	}
+	c, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers":     kafkaHost,
+		"broker.address.family": "v4",
+		"group.id":              groupId,
+		"session.timeout.ms":    6000,
+		"auto.offset.reset":     "beginning",
+	})
 
-	// Create new consumer
-	consumer, err := kafka.NewConsumer(consumerConfig)
 	if err != nil {
-		log.Fatalf("Failed to create consumer: %v", err)
-	}
-	defer consumer.Close()
-
-	// Subscribe to Kafka topic
-	err = consumer.SubscribeTopics([]string{"input-topic"}, nil)
-	if err != nil {
-		log.Fatalf("Failed to subscribe to topics: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to create consumer: %s\n", err)
+		os.Exit(1)
 	}
 
-	// Set up Kafka producer configuration
-	producerConfig := &kafka.ConfigMap{
-		"bootstrap.servers": kafkaHost,
-	}
+	fmt.Printf("Created Consumer %v\n", c)
+	topics := strings.Split(os.Getenv("TOPICS"), ",")
+	err = c.SubscribeTopics(topics, nil)
 
-	// Create new producer
-	producer, err := kafka.NewProducer(producerConfig)
-	if err != nil {
-		log.Fatalf("Failed to create producer: %v", err)
-	}
-	defer producer.Close()
+	run := true
 
-	// Set up signal handling to gracefully stop the consumer
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
+	for run {
+		select {
+		case sig := <-sigchan:
+			fmt.Printf("Caught signal %v: terminating\n", sig)
+			run = false
+		default:
+			ev := c.Poll(100)
+			if ev == nil {
+				continue
+			}
 
-	// Consume messages from Kafka topic
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
-		for {
-			select {
-			case ev := <-consumer.Events():
-				switch e := ev.(type) {
-				case *kafka.Message:
-					// Process incoming message
-					fmt.Printf("Received message: %s\n", string(e.Value))
-
-					// Create new message to send back to Kafka
-					producedMsg := &kafka.Message{
-						TopicPartition: kafka.TopicPartition{Topic: &[]string{os.Getenv("TOPIC")}[0], Partition: e.TopicPartition.Partition},
-						Value:          e.Value,
-					}
-
-					// Send message back to Kafka
-					err := producer.Produce(producedMsg, nil)
-					if err != nil {
-						log.Printf("Failed to send message: %v", err)
-					}
-
-				case kafka.Error:
-					log.Printf("Consumer error: %v", e)
+			switch e := ev.(type) {
+			case *kafka.Message:
+				// Process the message received.
+				fmt.Printf("%% Message on %s:\n%s\n",
+					e.TopicPartition, string(e.Value))
+				if e.Headers != nil {
+					fmt.Printf("%% Headers: %v\n", e.Headers)
 				}
 
-			case <-signals:
-				log.Println("Stopping consumer...")
-				return
+			case kafka.Error:
+				// Errors should generally be considered
+				// informational, the client will try to
+				// automatically recover.
+				// But in this example we choose to terminate
+				// the application if all brokers are down.
+				fmt.Fprintf(os.Stderr, "%% Error: %v: %v\n", e.Code(), e)
+				if e.Code() == kafka.ErrAllBrokersDown {
+					run = false
+				}
+			default:
+				fmt.Printf("Ignored %v\n", e)
 			}
 		}
-	}()
+	}
 
-	// Wait for the consumer to finish
-	wg.Wait()
-
-	log.Println("Consumer stopped.")
+	fmt.Printf("Closing consumer\n")
+	c.Close()
 }
