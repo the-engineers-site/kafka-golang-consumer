@@ -34,7 +34,7 @@ func main() {
 		"broker.address.family": "v4",
 		"group.id":              groupId,
 		"session.timeout.ms":    6000,
-		"auto.offset.reset":     "beginning",
+		"auto.offset.reset":     "earliest",
 	})
 
 	if err != nil {
